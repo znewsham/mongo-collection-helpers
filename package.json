@@ -1,18 +1,19 @@
 {
   "name": "mongo-collection-helpers",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A package to provide helper functionality for other packages that need mongo projections and test helpers",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
     "test": "node --test test/index.js",
-    "test:watch": "node --test --watch test/index.js"
+    "test:watch": "node --test --watch test/index.js",
+    "prepublish": "npx tsc && npm test"
   },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
-      "default": "./lib/index.ts"
+      "default": "./lib/index.js"
     },
     "./testHelpers": "./testHelpers.js",
     "./testHelpers.js": "./testHelpers.js"
