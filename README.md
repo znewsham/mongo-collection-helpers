@@ -30,7 +30,10 @@ unionOfProjections([
 ]) // { b: 0 }
 ```
 
-We also expose the type `NestedProjectionOfTSchema` which allows the defininition of a projection for a complex mongo schema - including array operations.
+We also expose the types
+-  `NestedProjectionOfTSchema` which allows the defininition of a projection for a complex mongo schema - including array operations.
+- `WithCursorDescription` - indicating a cursor exposes a valid `cursorDescription`
+- `CursorDescription` - which defines a filter + options (skip, limit, projection, sort)
 
 ## Test helpers
 We expose `FakeCollection` and `FakeFindCursor`. These are very lightweight partial implementations of the mongo API in memory, not suitable for production but generally acceptable for testing.
