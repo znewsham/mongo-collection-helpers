@@ -1,0 +1,214 @@
+import type { Document, Collection } from "mongodb";
+
+
+type AllPossibleValuesOfProjection<TSchema extends object = object> = NestedProjectionOfTSchema<object> | { $elemMatch: Document } | { $slice: number } | 1 | 0 | true | false
+
+type RecursiveKeyOf<TObj extends object> = {
+  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `${TKey}`>;
+}[keyof TObj & (string)];
+
+type RecursiveKeyOfInner<TObj extends object> = {
+  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `.${TKey}`>;
+}[keyof TObj & (string)];
+
+type RecursiveKeyOfHandleValue<TValue, Text extends string> =
+  TValue extends object[]
+    ? Text | `${Text}${RecursiveKeyOfInner<TValue[0]>}` | `${Text}.$`
+    : TValue extends any[]
+      ? Text | `${Text}.$`
+      : TValue extends object
+        ? Text | `${Text}${RecursiveKeyOfInner<TValue>}`
+        : Text
+;
+
+type TypeForDottedKey<TObj extends object, TKey extends string> = TKey extends `${infer prefix}.${infer suffix}`
+  ? prefix extends keyof TObj
+    ? TObj[prefix] extends {[k in suffix]: any }
+      ? TObj[prefix][suffix]
+      : TObj[prefix] extends object
+        ? TypeForDottedKey<TObj[prefix], suffix>
+        : never
+    : never
+  : TKey extends keyof TObj ? TObj[TKey] : never;
+
+
+export type NestedProjectionOfTSchema<TObj extends object> = {
+  [k in (keyof TObj | RecursiveKeyOf<TObj>) & string]?: k extends keyof TObj
+    ? TObj[k] extends object[]
+      ? 1 | 0 | NestedProjectionOfTSchema<TObj[k][0]> | { $elemMatch: Document } | { $slice: number }
+      : TObj[k] extends object
+        ? 1 | 0 | NestedProjectionOfTSchema<TObj[k]>
+        : 1 | 0
+    : TypeForDottedKey<TObj, k> extends object[]
+      ? 1 | 0 | { $elemMatch: Document } | { $slice: number } | NestedProjectionOfTSchema<TypeForDottedKey<TObj, k>[0]>
+      : TypeForDottedKey<TObj, k> extends object
+        ? 1 | 0 | NestedProjectionOfTSchema<TypeForDottedKey<TObj, k>>
+        : 1 | 0
+}
+
+export function isProjectionExclusion<TSchema extends Document>(projection: NestedProjectionOfTSchema<TSchema>, isTop: boolean = false) {
+  const first = isTop ? Object.entries(projection).find(([key]) => key !== "_id")?.[1] : Object.values(projection)[0];
+  if (first === undefined) {
+    return false;
+  }
+  if (typeof first === "object") {
+    return false;
+  }
+  return !first;
+}
+
+function isFalse<TSchema extends Document>(value: AllPossibleValuesOfProjection<TSchema> | undefined) {
+  return value === 0 || value === false;
+}
+
+function isTrue<TSchema extends Document>(value: AllPossibleValuesOfProjection<TSchema> | undefined) {
+  return value === 1 || value === true;
+}
+
+export function combineProjections<TSchema extends Document>(
+  left: AllPossibleValuesOfProjection<TSchema> | undefined,
+  right: AllPossibleValuesOfProjection<TSchema> | undefined,
+  leftParentIsExclusion: boolean,
+  rightParentIsExclusion: boolean,
+  depth: number = 0
+) : {
+  isExclusion: boolean,
+  projection: NestedProjectionOfTSchema<TSchema> | 0 | 1 | null,
+  hasNestedKeys: boolean
+} {
+  if (isFalse(left) && isFalse(right)) {
+    return {
+      isExclusion: true,
+      projection: 0,
+      hasNestedKeys: false
+    };
+  }
+  if (isTrue(left) && isTrue(right)) {
+    return {
+      isExclusion: false,
+      projection: 1,
+      hasNestedKeys: false
+    };
+  }
+  if (isFalse(left) || isFalse(right)) {
+    const other = isFalse(left) ? right : left;
+    const otherParentIsExclusion = isFalse(left) ? rightParentIsExclusion : leftParentIsExclusion;
+    if (typeof other === "object") {
+      const otherIsExclusion = isProjectionExclusion(other as NestedProjectionOfTSchema<TSchema>, false);
+      return {
+        isExclusion: !otherIsExclusion,
+        projection: otherIsExclusion ? other : {},
+        hasNestedKeys: otherIsExclusion
+      }
+    }
+    // if we're explicitly excluding this and the other isn't provided, but is part of an inclusion, we're fine to exclude it to
+    else if (isTrue(other) || (other === undefined && otherParentIsExclusion)) {
+      return {
+        isExclusion: false,
+        projection: {},
+        hasNestedKeys: false
+      };
+    }
+    else {
+      return {
+        isExclusion: true,
+        projection: 0,
+        hasNestedKeys: false
+      };
+    }
+  }
+  if (isTrue(left) || isTrue(right)) {
+    const other = isTrue(left) ? right : left;
+    const otherParentIsExclusion = isTrue(left) ? rightParentIsExclusion : leftParentIsExclusion;
+    if (typeof other === "object") {
+      const otherIsExclusion = isProjectionExclusion(other as NestedProjectionOfTSchema<TSchema>, false);
+      return {
+        isExclusion: false,
+        projection: 1,
+        hasNestedKeys: false
+      }
+    }
+    else if (other === undefined && otherParentIsExclusion) {
+      return {
+        isExclusion: false,
+        projection: null,
+        hasNestedKeys: false
+      };
+    }
+    else {
+      return {
+        isExclusion: false,
+        projection: 1,
+        hasNestedKeys: false
+      };
+    }
+  }
+  // at this point both left and right are objects.
+  let result: NestedProjectionOfTSchema<TSchema> | 0 | 1 = {};
+  const exclusionKeys = new Set<string>();
+  let isExclusion = false;
+  let hasKeys = true;
+  const allKeys = Array.from(new Set([
+    ...Object.keys(left || {}),
+    ...Object.keys(right || {})
+  ]));
+
+  // we're using an array operator ($elemMatch or $slice)
+  // we're going to return the entire array rather than trying to merge these stages
+  if (allKeys.find(k => k.startsWith("$"))) {
+    return {
+      isExclusion: false,
+      projection: 1,
+      hasNestedKeys: false
+    };
+  }
+
+  const isTop = depth === 0;
+  const leftIsExclusion = left && typeof left === "object" ? isProjectionExclusion(left, false) : leftParentIsExclusion;
+  const rightIsExclusion = right && typeof right === "object" ? isProjectionExclusion(right, false) : rightParentIsExclusion;
+  allKeys.every((key) => {
+    const leftValue: AllPossibleValuesOfProjection = left ? left[key]: undefined;
+    const rightValue: AllPossibleValuesOfProjection = right ? right[key] : undefined;
+    // _id is a special case at the top level.
+    if (isTop && key === "_id") {
+      if (isFalse(leftValue) && isFalse(rightValue)) {
+        result["_id"] = 0;
+        return true;
+      }
+      else if(!isFalse(leftValue) || !isFalse(rightValue)) {
+        return true;
+      }
+    }
+    const partialResult = combineProjections(leftValue, rightValue, leftIsExclusion, rightIsExclusion, depth + 1);
+    isExclusion = isExclusion || partialResult.isExclusion;
+    if (partialResult.isExclusion) {
+      exclusionKeys.add(key);
+    }
+    if (partialResult.projection === null) {
+      // do nothing - this happens when the top level is { a: 1 }, { b: 0 } we get null for a, and exclusion for b.
+    }
+    else if (typeof partialResult.projection === "object" && !partialResult.hasNestedKeys) {
+      result = 1;
+      hasKeys = false;
+      // if we get here, there's a mismatch - e.g., a: 1, a: 0
+      return false;
+    }
+    else {
+      result[key] = partialResult.projection;
+    }
+    return true;
+  });
+  return {
+    isExclusion: false,
+    projection: isExclusion ? Object.fromEntries(Object.entries(result).filter(([key]) => exclusionKeys.has(key as string))) as NestedProjectionOfTSchema<TSchema> : result,
+    hasNestedKeys: hasKeys
+  };
+}
+export function unionOfProjections<TSchema extends Document>(projections: NestedProjectionOfTSchema<TSchema>[]): NestedProjectionOfTSchema<TSchema> {
+  let result: NestedProjectionOfTSchema<TSchema> = projections[0] || {};
+  projections.slice(1).forEach((projection) => {
+    result = combineProjections(result, projection, false, false)?.projection as NestedProjectionOfTSchema<TSchema>;
+  });
+
+  return result;
+}

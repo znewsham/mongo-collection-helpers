@@ -1,0 +1,9 @@
+lib
+legacy
+node_modules
+package-lock.json
+*.scratch.*
+.coverage
+.coverage-report
+documenter.cjs
+docs
