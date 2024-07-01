@@ -52,7 +52,7 @@ export type CursorDescription<T> = {
     skip?: number,
     limit?: number,
     sort?: [string, 1 | -1][] | { [k in string]: 1 | -1},
-    projection?: { [k in string]: 0 | 1 | boolean },
+    projection?: T extends object ? NestedProjectionOfTSchema<T> : never,
   }
 }
 
