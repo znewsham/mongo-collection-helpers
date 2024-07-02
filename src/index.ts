@@ -224,6 +224,22 @@ export function unionOfProjections<TSchema extends Document>(projections: Nested
   let result: NestedProjectionOfTSchema<TSchema> = projections[0] || {};
   projections.slice(1).forEach((projection) => {
     result = combineProjections(result, projection, false, false)?.projection as NestedProjectionOfTSchema<TSchema>;
+
+    // this is where we deal with the mixture of dot and nested keys.
+    const keys = Object.keys(result).sort((key1, key2) => key1.split(".").length - key2.split(".").length);
+    const prefixes = new Set<string>();
+    keys.forEach((key) => {
+      const keyParts = key.split(".");
+      for (let i = 1; i <= keyParts.length; i++) {
+        const prefix = keyParts.slice(0, i).join(".");
+        if (prefixes.has(prefix)) {
+          delete result[key];
+          break;
+        }
+        prefixes.add(prefix);
+      }
+    })
+
   });
 
   return result;
