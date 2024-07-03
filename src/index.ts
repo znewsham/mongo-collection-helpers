@@ -1,3 +1,17 @@
+/**
+ *
+ *
+ *
+ *
+ *
+ * There were only two locations in this file using syntax unavailable in es2015 (around the latest node12 supports)
+ * So I just removed those instead of transpiling down
+ *
+ *
+ *
+ *
+ */
+
 import type { Document, Filter } from "mongodb";
 
 
@@ -61,7 +75,8 @@ export type WithCursorDescription<T> = {
 }
 
 export function isProjectionExclusion<TSchema extends Document>(projection: NestedProjectionOfTSchema<TSchema>, isTop: boolean = false) {
-  const first = isTop ? Object.entries(projection).find(([key]) => key !== "_id")?.[1] : Object.values(projection)[0];
+  const entry = Object.entries(projection).find(([key]) => key !== "_id");
+  const first = isTop ? entry && entry[1] : Object.values(projection)[0];
   if (first === undefined) {
     return false;
   }
@@ -223,7 +238,8 @@ export function combineProjections<TSchema extends Document>(
 export function unionOfProjections<TSchema extends Document>(projections: NestedProjectionOfTSchema<TSchema>[]): NestedProjectionOfTSchema<TSchema> {
   let result: NestedProjectionOfTSchema<TSchema> = projections[0] || {};
   projections.slice(1).forEach((projection) => {
-    result = combineProjections(result, projection, false, false)?.projection as NestedProjectionOfTSchema<TSchema>;
+    const partialRes = combineProjections(result, projection, false, false);
+    result = partialRes && partialRes.projection as NestedProjectionOfTSchema<TSchema>;
 
     // this is where we deal with the mixture of dot and nested keys.
     const keys = Object.keys(result).sort((key1, key2) => key1.split(".").length - key2.split(".").length);
