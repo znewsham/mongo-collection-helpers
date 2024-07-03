@@ -1,3 +1,5 @@
-import { Collection } from "mongodb";
+import { Collection, Document } from "mongodb";
 
-export declare class FakeCollection<TSchema = any> implements Collection<TSchema>;
+export declare class FakeCollection<TSchema extends Document = Document> extends Collection<TSchema> {
+
+}
