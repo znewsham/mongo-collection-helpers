@@ -16,7 +16,7 @@ export class FakeFindCursor {
     this.#options = options || {};
     this.#transform = transform;
     this.#comparator = options?.sort ? new Minimongo.Sorter(options.sort).getComparator() : () => 0;
-    this.#matcher = new Minimongo.Matcher(filter);
+    this.#matcher = new Minimongo.Matcher(filter || {});
     this.#i = this.#options.skip || 0;
   }
 
@@ -50,9 +50,36 @@ export class FakeFindCursor {
     if (obj && typeof obj === "object" && this.#options.projection?._id !== 0) {
       copy._id = obj._id;
     }
-    Object.entries(this.#options.projection || {}).filter(([, value]) => value === 1 || value === true).forEach(([key]) => {
-      if (Object.hasOwnProperty.call(obj, key)) {
+    Object.entries(this.#options.projection || {}).filter(([, value]) => value === 1 || value === true || typeof value === "object").forEach(([key, value]) => {
+      if (typeof value === "object" && typeof obj[key] === "object") {
+        copy[key] = {};
+        Object.keys(value).forEach((pk) => {
+          copy[key][pk] = obj[key][pk];
+        });
+      }
+      else if (Object.hasOwnProperty.call(obj, key)) {
         copy[key] = obj[key];
+      }
+      else if (key.includes(".")) {
+        let newObj = obj;
+        let newCopy = copy;
+        const parts = key.split(".");
+        let bad = false;
+        parts.slice(0, -1).forEach(part => {
+          if (typeof newObj[part] === "object") {
+            newObj = newObj[part];
+            if (!newCopy[part]) {
+              newCopy[part] = {};
+            }
+            newCopy = newCopy[part];
+          }
+          else {
+            bad = true;
+          }
+        });
+        if (!bad) {
+          newCopy[parts.slice(-1)[0]] = newObj[parts.slice(-1)[0]];
+        }
       }
     });
     return copy;
