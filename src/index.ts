@@ -12,7 +12,7 @@
  *
  */
 
-import type { Document, Filter, FilterOperators } from "mongodb";
+import type { BSONRegExp, Document, Filter, FilterOperators, WithId } from "mongodb";
 
 
 type AllPossibleValuesOfProjection<TSchema extends object = object> =
@@ -71,7 +71,9 @@ type TypeForDottedKey<TObj extends object, TKey extends string> = TKey extends `
 type AggregationProjectionDocument<TObj extends any> = never;
 
 type ProjectionElemMatch<T extends any[]> = NestedFilterOfTSchema<T[0]> | RootFilterOperators<T[0]>;
-export type NestedProjectionOfTSchema<TObj extends object> = {
+
+
+type NestedProjectionOfTSchemaWithId<TObj extends object> = {
   [k in (keyof TObj | RecursiveKeyOf<TObj, true>) & string]?: k extends keyof TObj
     ? TObj[k] extends object[]
       ? 1 | 0 | NestedProjectionOfTSchema<TObj[k][0]> | { $elemMatch?: ProjectionElemMatch<TObj[k]>, $slice?: number }
@@ -85,13 +87,16 @@ export type NestedProjectionOfTSchema<TObj extends object> = {
         : 1 | 0
 }
 
-type AlwaysOperators<T> = Pick<FilterOperators<T>, "$exists" | "$type" | "$expr">
-  | { $not: T extends string ? FilterOperatorsByType<T> | RegExp : FilterOperatorsByType<T> }
 
-type EqualityOperators<T> = Pick<FilterOperators<T>, "$eq" | "$ne">
+export type NestedProjectionOfTSchema<TObj extends object> = NestedProjectionOfTSchemaWithId<WithId<TObj>>
+
+type AlwaysOperators<T> = Partial<Pick<FilterOperators<T>, "$exists" | "$type" | "$expr">>
+  | { $not?: RegExp | FilterOperatorsByType<T> }
+
+type EqualityOperators<T> = Partial<Pick<FilterOperators<T>, "$eq" | "$ne" | "$exists">>
   | (T extends any[]
-    ? Pick<FilterOperators<T[0]>, "$in" | "$nin">
-    : Pick<FilterOperators<T>, "$in" | "$nin">);
+    ? Partial<Pick<FilterOperators<T[0]>, "$in" | "$nin">>
+    : Partial<Pick<FilterOperators<T>, "$in" | "$nin">>);
 
 type BinaryOperator<T> = AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
   FilterOperators<T>,
@@ -103,13 +108,12 @@ type NumericOperators<T> = AlwaysOperators<T> | EqualityOperators<T> | Partial<P
   "$lt" | "$gt" | "$lte" | "$gte" | "$mod"
 >>
 
-type StringOperators<T> = string | RegExp | AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
+type StringOperators<T> = RegExp | BSONRegExp | AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
   FilterOperators<T>,
   "$regex" | "$options"
 >>
 
-type ArrayOperators<T extends any[]> = AlwaysOperators<T>
-  | EqualityOperators<T>
+type ArrayOperators<T extends ReadonlyArray<any>> = EqualityOperators<T>
   | {
     $all?: T,
     $size?: number
@@ -117,7 +121,6 @@ type ArrayOperators<T extends any[]> = AlwaysOperators<T>
   }
 
 type BinaryLike = Uint8Array | { buffer: Uint8Array };
-
 
 type FilterOperatorsByType<T> = T extends any[]
   // if it's an array, it gets ArrayOperators + the relevant operators for it's 0th item
@@ -135,19 +138,15 @@ type FilterOperatorsByType<T> = T extends any[]
 
 type NestedFilterOfTSchemaValue<TObj extends object, k extends string> = k extends keyof TObj
 ? TObj[k] extends object[]
-  ? FilterOperatorsByType<TObj[k]>
-  : TObj[k] extends object
-    ? TObj[k] | FilterOperatorsByType<TObj[k]>
-    : TObj[k] extends any[]
-      ? FilterOperatorsByType<TObj[k][0]> | TObj[k][0]
-      : FilterOperatorsByType<TObj[k]> | TObj[k]
+  ? FilterOperatorsByType<TObj[k]> | TObj[k]
+  : TObj[k] extends any[]
+    ? FilterOperatorsByType<TObj[k]> | TObj[k][0] | TObj[k]
+    : FilterOperatorsByType<TObj[k]> | TObj[k]
 : TypeForDottedKey<TObj, k> extends object[]
   ? FilterOperatorsByType<TypeForDottedKey<TObj, k>>
-  : TypeForDottedKey<TObj, k> extends object
-    ? TypeForDottedKey<TObj, k> | FilterOperatorsByType<TypeForDottedKey<TObj, k>>
-    : TypeForDottedKey<TObj, k> extends any[]
-      ? FilterOperatorsByType<TypeForDottedKey<TObj, k>[0]> | TypeForDottedKey<TObj, k>[0]
-      : FilterOperatorsByType<TypeForDottedKey<TObj, k>> | TypeForDottedKey<TObj, k>
+  : TypeForDottedKey<TObj, k> extends any[]
+    ? FilterOperatorsByType<TypeForDottedKey<TObj, k>[0]> | TypeForDottedKey<TObj, k>[0]
+    : FilterOperatorsByType<TypeForDottedKey<TObj, k>> | TypeForDottedKey<TObj, k>
 
 
 export type NestedFilterOfTSchema<TObj extends object> = {
@@ -170,7 +169,7 @@ export interface RootRootFilterOperators<TSchema extends object> extends RootFil
   $comment?: string | Document;
 }
 
-export type RootFilterOfTSchema<TObj extends object> = NestedFilterOfTSchema<TObj> | RootRootFilterOperators<TObj>;
+export type RootFilterOfTSchema<TObj extends object> = NestedFilterOfTSchema<WithId<TObj>> | RootRootFilterOperators<WithId<TObj>>;
 
 
 export type CursorDescription<T> = {
