@@ -12,53 +12,166 @@
  *
  */
 
-import type { Document, Filter } from "mongodb";
+import type { Document, Filter, FilterOperators } from "mongodb";
 
 
-type AllPossibleValuesOfProjection<TSchema extends object = object> = NestedProjectionOfTSchema<TSchema> | { $elemMatch: Document } | { $slice: number } | 1 | 0 | true | false
+type AllPossibleValuesOfProjection<TSchema extends object = object> =
+  NestedProjectionOfTSchema<TSchema>
+  | { $elemMatch?: Document, $slice?: number }
+  | 1 | 0 | true | false
 
-type RecursiveKeyOf<TObj extends object> = {
-  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `${TKey}`>;
+type RecursiveKeyOf<TObj extends object, useDollar extends boolean> = {
+  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `${TKey}`, useDollar>;
 }[keyof TObj & (string)];
 
-type RecursiveKeyOfInner<TObj extends object> = {
-  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `.${TKey}`>;
+type RecursiveKeyOfInner<TObj extends object, useDollar extends boolean> = {
+  [TKey in keyof TObj & (string)]: RecursiveKeyOfHandleValue<TObj[TKey], `.${TKey}`, useDollar>;
 }[keyof TObj & (string)];
 
-type RecursiveKeyOfHandleValue<TValue, Text extends string> =
+type RecursiveKeyOfHandleValue<TValue, Text extends string, useDollar extends boolean> =
   TValue extends object[]
-    ? Text | `${Text}${RecursiveKeyOfInner<TValue[0]>}` | `${Text}.$`
+    ? Text | (useDollar extends true
+      ? `${Text}${RecursiveKeyOfInner<TValue[0], useDollar>}` | `${Text}.$`
+      : `${Text}${RecursiveKeyOfInner<TValue[0], useDollar>}` | `${Text}.${number}${RecursiveKeyOfInner<TValue[0], useDollar>}`) | `${Text}.${number}`
     : TValue extends any[]
-      ? Text | `${Text}.$`
+      ? Text | `${Text}.${useDollar extends true ? '$' : `${number}`}`
       : TValue extends object
-        ? Text | `${Text}${RecursiveKeyOfInner<TValue>}`
+        ? Text | `${Text}${RecursiveKeyOfInner<TValue, useDollar>}`
         : Text
 ;
+
 
 type TypeForDottedKey<TObj extends object, TKey extends string> = TKey extends `${infer prefix}.${infer suffix}`
   ? prefix extends keyof TObj
     ? TObj[prefix] extends {[k in suffix]: any }
-      ? TObj[prefix][suffix]
-      : TObj[prefix] extends object
-        ? TypeForDottedKey<TObj[prefix], suffix>
-        : never
-    : never
-  : TKey extends keyof TObj ? TObj[TKey] : never;
+      ? suffix extends `${number}`
+        ? TObj[prefix] extends any[]
+          ? TObj[prefix][0]
+          : TObj[prefix][suffix]
+        : TypeForDottedKey<TObj[prefix], suffix>
+      : TObj[prefix] extends object[]
+        ? suffix extends `${number}`
+          ? TObj[prefix][0]
+          : TypeForDottedKey<TObj[prefix], suffix>
+        : TObj[prefix] extends object
+          ? TypeForDottedKey<TObj[prefix], suffix>
+          : 1
+    : TObj extends any[]
+      ? TypeForDottedKey<TObj[0], suffix>
+      : { prefix: prefix, suffix: suffix, TObj: TObj }
+  : TKey extends keyof TObj
+    ? TObj[TKey]
+    : TObj extends any[]
+      ? TKey extends `${number}`
+        ? TObj[0]
+        : TypeForDottedKey<TObj[0], TKey>
+      : never
 
+// eh. Need to look at this.
+type AggregationProjectionDocument<TObj extends any> = never;
 
+type ProjectionElemMatch<T extends any[]> = NestedFilterOfTSchema<T[0]> | RootFilterOperators<T[0]>;
 export type NestedProjectionOfTSchema<TObj extends object> = {
-  [k in (keyof TObj | RecursiveKeyOf<TObj>) & string]?: k extends keyof TObj
+  [k in (keyof TObj | RecursiveKeyOf<TObj, true>) & string]?: k extends keyof TObj
     ? TObj[k] extends object[]
-      ? 1 | 0 | NestedProjectionOfTSchema<TObj[k][0]> | { $elemMatch: Document } | { $slice: number }
+      ? 1 | 0 | NestedProjectionOfTSchema<TObj[k][0]> | { $elemMatch?: ProjectionElemMatch<TObj[k]>, $slice?: number }
       : TObj[k] extends object
         ? 1 | 0 | NestedProjectionOfTSchema<TObj[k]>
         : 1 | 0
     : TypeForDottedKey<TObj, k> extends object[]
-      ? 1 | 0 | { $elemMatch: Document } | { $slice: number } | NestedProjectionOfTSchema<TypeForDottedKey<TObj, k>[0]>
+      ? 1 | 0 | NestedProjectionOfTSchema<TypeForDottedKey<TObj, k>[0]>
       : TypeForDottedKey<TObj, k> extends object
         ? 1 | 0 | NestedProjectionOfTSchema<TypeForDottedKey<TObj, k>>
         : 1 | 0
 }
+
+type AlwaysOperators<T> = Pick<FilterOperators<T>, "$exists" | "$type" | "$expr">
+  | { $not: T extends string ? FilterOperatorsByType<T> | RegExp : FilterOperatorsByType<T> }
+
+type EqualityOperators<T> = Pick<FilterOperators<T>, "$eq" | "$ne">
+  | (T extends any[]
+    ? Pick<FilterOperators<T[0]>, "$in" | "$nin">
+    : Pick<FilterOperators<T>, "$in" | "$nin">);
+
+type BinaryOperator<T> = AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
+  FilterOperators<T>,
+  "$bitsAllClear" | "$bitsAllSet" | "$bitsAnyClear" | "$bitsAnySet"
+>>
+
+type NumericOperators<T> = AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
+  FilterOperators<T>,
+  "$lt" | "$gt" | "$lte" | "$gte" | "$mod"
+>>
+
+type StringOperators<T> = string | RegExp | AlwaysOperators<T> | EqualityOperators<T> | Partial<Pick<
+  FilterOperators<T>,
+  "$regex" | "$options"
+>>
+
+type ArrayOperators<T extends any[]> = AlwaysOperators<T>
+  | EqualityOperators<T>
+  | {
+    $all?: T,
+    $size?: number
+    $elemMatch?: NestedFilterOfTSchema<T[0]> | RootFilterOperators<T[0]>
+  }
+
+type BinaryLike = Uint8Array | { buffer: Uint8Array };
+
+
+type FilterOperatorsByType<T> = T extends any[]
+  // if it's an array, it gets ArrayOperators + the relevant operators for it's 0th item
+  ? FilterOperatorsByType<T[0]> | ArrayOperators<T>
+  : T extends string
+    ? StringOperators<T>
+    : T extends number
+      ? NumericOperators<T> | BinaryOperator<T>
+      : T extends object
+        ? T
+        : T extends BinaryLike
+          ? BinaryOperator<T>
+          : never
+
+
+type NestedFilterOfTSchemaValue<TObj extends object, k extends string> = k extends keyof TObj
+? TObj[k] extends object[]
+  ? FilterOperatorsByType<TObj[k]>
+  : TObj[k] extends object
+    ? TObj[k] | FilterOperatorsByType<TObj[k]>
+    : TObj[k] extends any[]
+      ? FilterOperatorsByType<TObj[k][0]> | TObj[k][0]
+      : FilterOperatorsByType<TObj[k]> | TObj[k]
+: TypeForDottedKey<TObj, k> extends object[]
+  ? FilterOperatorsByType<TypeForDottedKey<TObj, k>>
+  : TypeForDottedKey<TObj, k> extends object
+    ? TypeForDottedKey<TObj, k> | FilterOperatorsByType<TypeForDottedKey<TObj, k>>
+    : TypeForDottedKey<TObj, k> extends any[]
+      ? FilterOperatorsByType<TypeForDottedKey<TObj, k>[0]> | TypeForDottedKey<TObj, k>[0]
+      : FilterOperatorsByType<TypeForDottedKey<TObj, k>> | TypeForDottedKey<TObj, k>
+
+
+export type NestedFilterOfTSchema<TObj extends object> = {
+  [k in (keyof TObj | RecursiveKeyOf<TObj, false>) & string]?: NestedFilterOfTSchemaValue<TObj, k>
+}
+interface RootFilterOperators<TSchema extends object> {
+  $and?: NestedFilterOfTSchema<TSchema>[];
+  $nor?: NestedFilterOfTSchema<TSchema>[];
+  $or?: NestedFilterOfTSchema<TSchema>[];
+  $where?: string | ((this: TSchema) => boolean);
+  $expr?: Record<string, any>
+}
+export interface RootRootFilterOperators<TSchema extends object> extends RootFilterOperators<TSchema> {
+  $text?: {
+    $search: string;
+    $language?: string;
+    $caseSensitive?: boolean;
+    $diacriticSensitive?: boolean;
+  };
+  $comment?: string | Document;
+}
+
+export type RootFilterOfTSchema<TObj extends object> = NestedFilterOfTSchema<TObj> | RootRootFilterOperators<TObj>;
+
 
 export type CursorDescription<T> = {
   filter?: Filter<T>,
@@ -67,6 +180,7 @@ export type CursorDescription<T> = {
     limit?: number,
     sort?: [string, 1 | -1][] | { [k in string]: 1 | -1},
     projection?: T extends object ? NestedProjectionOfTSchema<T> : never,
+    disableOplog?: boolean
   }
 }
 
