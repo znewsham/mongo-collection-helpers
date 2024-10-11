@@ -15,7 +15,7 @@ const expectedErrors = new Map([
   [
     "types/projections/$elemMatchInvalidKey.ts",
     [
-      "/types/projections/$elemMatchInvalidKey.ts (10,7): Type 'number' is not assignable to type 'StringOperators<string>'.",
+      "/types/projections/$elemMatchInvalidKey.ts (10,7): Type 'number' is not assignable to type 'string | StringOperators<string>'.",
       "/types/projections/$elemMatchInvalidKey.ts (17,16): Object literal may only specify known properties, and 'd' does not exist in type 'NestedFilterOfTSchema<{ b: number; c: string; }>'."
     ]
   ]
