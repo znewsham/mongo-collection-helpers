@@ -1,5 +1,5 @@
 import { Filter } from "mongodb";
-import { RootFilterOfTSchema } from "../../../src/index.js";
+import { FilterOfTSchema } from "../../../src/index.js";
 
 type T = {
   a1: string[],
@@ -8,7 +8,7 @@ type T = {
   d: { e: string, f: number, g: { h: number, i: string, j: { a: number } }[] }
 };
 
-const f: RootFilterOfTSchema<T> = {
+const f: FilterOfTSchema<T> = {
   a1: {
     $ne: "test"
   },

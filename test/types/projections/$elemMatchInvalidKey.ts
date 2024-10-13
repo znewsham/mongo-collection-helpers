@@ -1,17 +1,17 @@
-import { NestedProjectionOfTSchema } from "../../../src/index.js";
+import { ProjectionOfTSchema } from "../../../src/index.js";
 
 type T = {
   a: { b: number, c: string }[],
 };
 
-const f: NestedProjectionOfTSchema<T> = {
+const f: ProjectionOfTSchema<T> = {
   a: {
     $elemMatch: {
       c: 1
     }
   }
 };
-const f2: NestedProjectionOfTSchema<T> = {
+const f2: ProjectionOfTSchema<T> = {
   a: {
     $elemMatch: {
       $and: [{ d: 1 }]
@@ -20,4 +20,3 @@ const f2: NestedProjectionOfTSchema<T> = {
 };
 
 console.log(f, f2);
-

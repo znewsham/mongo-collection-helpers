@@ -1,10 +1,10 @@
-import { NestedProjectionOfTSchema } from "../../../src/index.js";
+import { ProjectionOfTSchema } from "../../../src/index.js";
 
 type T = {
   a: { b: number, c: string },
 };
 
-const f: NestedProjectionOfTSchema<T> = {
+const f: ProjectionOfTSchema<T> = {
   _id: 0
 };
 

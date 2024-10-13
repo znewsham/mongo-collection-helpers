@@ -1,6 +1,6 @@
 {
   "name": "mongo-collection-helpers",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "A package to provide helper functionality for other packages that need mongo projections and test helpers",
   "type": "module",
   "main": "./lib/index.js",

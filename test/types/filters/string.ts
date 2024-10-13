@@ -1,12 +1,12 @@
 import { Filter } from "mongodb";
-import { RootFilterOfTSchema } from "../../../src/index.js";
+import { FilterOfTSchema } from "../../../src/index.js";
 
 type T = {
   a: string,
   b: string[],
 };
 
-const f: RootFilterOfTSchema<T> = {
+const f: FilterOfTSchema<T> = {
   $and: [
     { a: /hello/i },
     { a: "hello" },
@@ -26,4 +26,3 @@ const f: RootFilterOfTSchema<T> = {
 const f2: Filter<T> = f;
 
 console.log(f, f2);
-

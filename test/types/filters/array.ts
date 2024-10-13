@@ -1,12 +1,12 @@
 import { Filter } from "mongodb";
-import { RootFilterOfTSchema } from "../../../src/index.js";
+import { FilterOfTSchema } from "../../../src/index.js";
 
 type T = {
   a: { c: number, d: string }[],
   b: string[],
 };
 
-const f: RootFilterOfTSchema<T> = {
+const f: FilterOfTSchema<T> = {
   $and: [
     { b: { $all: ["test", "test1"] } },
     { a: { $all: [{ c: 1, d: "test" }] } }
