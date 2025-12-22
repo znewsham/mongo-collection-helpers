@@ -4,6 +4,10 @@ export class FakeFindCursor {
   #i = 0;
   #id;
   #data;
+
+  // tracked separately from #dataFilteredAndSorted as rewind resets that, but shouldn't reset executed
+  // a real mongo cursor cannot be modified after execution, even if rewound.
+  #executed = false;
   #dataFilteredAndSorted
   #transform;
   #filter;
@@ -101,6 +105,7 @@ export class FakeFindCursor {
   async toArray() {
     try {
       this.#init();
+      this.#executed = true;
       return this.#dataFilteredAndSorted.slice(this.#i).map(doc => JSON.parse(JSON.stringify(doc)));
     }
     finally {
@@ -110,11 +115,13 @@ export class FakeFindCursor {
 
   async count() {
     this.#init();
+    this.#executed = true;
     return this.#dataFilteredAndSorted.length;
   }
 
   async forEach(iterator) {
     this.#init();
+    this.#executed = true;
     try {
       return this.#dataFilteredAndSorted.forEach(iterator);
     }
@@ -135,6 +142,7 @@ export class FakeFindCursor {
 
   async next() {
     this.#init();
+    this.#executed = true;
     if (this.#i === this.#options.limit) {
       this.rewind();
       return null;
@@ -148,6 +156,7 @@ export class FakeFindCursor {
 
   async* [Symbol.asyncIterator]() {
     this.#init();
+    this.#executed = true;
     for (const item of this.#dataFilteredAndSorted) {
       this.#i++;
       yield item;
@@ -156,14 +165,38 @@ export class FakeFindCursor {
   }
 
   clone() {
+    const newCursor = new FakeFindCursor(this.#data, this.#filter, this.#options, this.#transform);
+    newCursor.#options = { ...this.#options };
+    return newCursor;
+  }
+
+  sort(sort) {
+    if (this.#executed) {
+      throw new Error("Can't project after query has been executed");
+    }
+    this.#options.sort = sort;
+    return this;
+  }
+
+  limit(limit) {
+    if (this.#executed) {
+      throw new Error("Can't project after query has been executed");
+    }
+    this.#options.limit = limit;
     return this;
   }
 
   project(projection) {
+    if (this.#executed) {
+      throw new Error("Can't project after query has been executed");
+    }
     this.#options.projection = projection;
     return this;
   }
   map(transform) {
+    if (this.#executed) {
+      throw new Error("Can't project after query has been executed");
+    }
     this.#transform = transform;
     return this;
   }
