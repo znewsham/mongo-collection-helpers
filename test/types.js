@@ -1,6 +1,6 @@
 import path from "node:path";
-import fs from "fs/promises";
-import { describe, it } from "node:test";
+import fs from "fs";
+import test, { describe, it } from "node:test";
 import assert from "node:assert";
 
 // eslint-disable-next-line
@@ -43,9 +43,9 @@ function compile(fileNames) {
 }
 
 
-describe("The types work as expected", { concurrency: 10 }, async () => {
-  const files = await fs.readdir(path.join(dirName, "types"), { recursive: true, withFileTypes: true });
-  files.filter(dirent => !dirent.isDirectory()).forEach(({ name, parentPath }) => {
+describe("The types work as expected", { concurrency: 10 }, () => {
+  const files = fs.readdirSync(path.join(dirName, "types"), { recursive: true, withFileTypes: true });
+  files.filter(dirent => !dirent.isDirectory()).forEach(({ name, path: parentPath }) => {
     const testName = `${parentPath.replace(dirName, "").replace(/^\//, "")}/${name}`;
     it(`${testName} should work`, () => {
       const diagnostics = compile([testName]);
