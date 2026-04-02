@@ -299,4 +299,22 @@ describe("unionOfProjections", () => {
       { a: 1 }
     );
   });
+  it("Should work with identical nested projections", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        { "context.a": 1, "context.b": 1 },
+        { "context.a": 1, "context.b": 1 }
+      ]),
+      { "context.a": 1, "context.b": 1 }
+    );
+  });
+  it("Should subsume dot-notation nested key when broader key exists", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        { "context.a": 1 },
+        { context: 1 }
+      ]),
+      { context: 1 }
+    );
+  });
 });
