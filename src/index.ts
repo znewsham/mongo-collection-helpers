@@ -386,16 +386,16 @@ export function unionOfProjections<TSchema extends Document>(projections: Projec
 
     // this is where we deal with the mixture of dot and nested keys.
     const keys = Object.keys(result).sort((key1, key2) => key1.split(".").length - key2.split(".").length);
-    const prefixes = new Set<string>();
+    const resultKeys = new Set(keys);
     keys.forEach((key) => {
       const keyParts = key.split(".");
-      for (let i = 1; i <= keyParts.length; i++) {
+      for (let i = 1; i < keyParts.length; i++) {
         const prefix = keyParts.slice(0, i).join(".");
-        if (prefixes.has(prefix)) {
+        if (resultKeys.has(prefix)) {
           delete result[key];
+          resultKeys.delete(key);
           break;
         }
-        prefixes.add(prefix);
       }
     })
 
