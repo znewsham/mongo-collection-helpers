@@ -317,4 +317,40 @@ describe("unionOfProjections", () => {
       { context: 1 }
     );
   });
+  it("Should return an empty projection when the 0th projection is an empty object", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        {},
+        { a: 1 }
+      ]),
+      {}
+    );
+  });
+  it("Should return an empty projection when the 1st projection is an empty object", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        { a: 1 },
+        {}
+      ]),
+      {}
+    );
+  });
+  it("Should return an empty projection when the 0th projection is undefined", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        undefined,
+        { a: 1 }
+      ]),
+      {}
+    );
+  });
+  it("Should return an empty projection when the 1st projection is undefined", () => {
+    assert.deepEqual(
+      unionOfProjections([
+        { a: 1 },
+        undefined
+      ]),
+      {}
+    );
+  });
 });

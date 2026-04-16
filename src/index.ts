@@ -379,6 +379,9 @@ export function combineProjections<TSchema extends Document>(
   };
 }
 export function unionOfProjections<TSchema extends Document>(projections: ProjectionOfTSchema<TSchema>[]): ProjectionOfTSchema<TSchema> {
+  if (projections.some((projection) => !projection || Object.keys(projection).length === 0)) {
+    return {} as ProjectionOfTSchema<TSchema>;
+  }
   let result: ProjectionOfTSchema<TSchema> = projections[0] || {};
   projections.slice(1).forEach((projection) => {
     const partialRes = combineProjections(result, projection, false, false);
